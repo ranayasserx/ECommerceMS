@@ -1,36 +1,47 @@
+using MassTransit;
+using Microsoft.EntityFrameworkCore;
+using PaymentService.Consumers;
+using PaymentService.Data;
 
-namespace PaymentService
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+// In-memory database
+builder.Services.AddDbContext<PaymentDbContext>(options =>
+    options.UseInMemoryDatabase("PaymentsDb"));
+
+// RabbitMQ with MassTransit - registers the consumer
+builder.Services.AddMassTransit(x =>
 {
-    public class Program
+    // Register the consumer
+    x.AddConsumer<OrderPlacedConsumer>();
+
+    x.UsingRabbitMq((context, cfg) =>
     {
-        public static void Main(string[] args)
+        cfg.Host(builder.Configuration["RabbitMQ__Host"] ?? "localhost", "/", h =>
         {
-            var builder = WebApplication.CreateBuilder(args);
+            h.Username("guest");
+            h.Password("guest");
+        });
 
-            // Add services to the container.
+        // Tell MassTransit to listen for OrderPlacedEvent
+        cfg.ConfigureEndpoints(context);
+    });
+});
 
-            builder.Services.AddControllers();
-            // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-            builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+});
 
-            var app = builder.Build();
+var app = builder.Build();
 
-            // Configure the HTTP request pipeline.
-            if (app.Environment.IsDevelopment())
-            {
-                app.UseSwagger();
-                app.UseSwaggerUI();
-            }
-
-            app.UseHttpsRedirection();
-
-            app.UseAuthorization();
-
-
-            app.MapControllers();
-
-            app.Run();
-        }
-    }
-}
+app.UseSwagger();
+app.UseSwaggerUI();
+app.UseCors("AllowAll");
+app.MapControllers();
+app.Run();
