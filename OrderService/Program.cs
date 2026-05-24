@@ -1,36 +1,40 @@
+using MassTransit;
+using Microsoft.EntityFrameworkCore;
+using OrderService.Data;
 
-namespace OrderService
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+// In-memory database
+builder.Services.AddDbContext<OrderDbContext>(options =>
+    options.UseInMemoryDatabase("OrdersDb"));
+
+// RabbitMQ with MassTransit
+builder.Services.AddMassTransit(x =>
 {
-    public class Program
+    x.UsingRabbitMq((context, cfg) =>
     {
-        public static void Main(string[] args)
+        cfg.Host(builder.Configuration["RabbitMQ__Host"] ?? "localhost", "/", h =>
         {
-            var builder = WebApplication.CreateBuilder(args);
+            h.Username("guest");
+            h.Password("guest");
+        });
+    });
+});
 
-            // Add services to the container.
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+});
 
-            builder.Services.AddControllers();
-            // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-            builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
+var app = builder.Build();
 
-            var app = builder.Build();
-
-            // Configure the HTTP request pipeline.
-            if (app.Environment.IsDevelopment())
-            {
-                app.UseSwagger();
-                app.UseSwaggerUI();
-            }
-
-            app.UseHttpsRedirection();
-
-            app.UseAuthorization();
-
-
-            app.MapControllers();
-
-            app.Run();
-        }
-    }
-}
+app.UseSwagger();
+app.UseSwaggerUI();
+app.UseCors("AllowAll");
+app.MapControllers();
+app.Run();
